@@ -102,12 +102,20 @@ class LeRobotDatasetMetadata:
                 raise FileNotFoundError
             self.load_metadata()
         except (FileNotFoundError, NotADirectoryError):
-            if is_valid_version(self.revision):
+            # Skip network operations for local datasets
+            is_local = repo_id == "local" or repo_id.startswith("/")
+            
+            if is_valid_version(self.revision) and not is_local:
                 self.revision = get_safe_version(self.repo_id, self.revision)
 
             (self.root / "meta").mkdir(exist_ok=True, parents=True)
-            self.pull_from_repo(allow_patterns="meta/")
-            self.load_metadata()
+            
+            if is_local:
+                # For local datasets, just load metadata directly without pulling from hub
+                self.load_metadata()
+            else:
+                self.pull_from_repo(allow_patterns="meta/")
+                self.load_metadata()
 
     def _flush_metadata_buffer(self) -> None:
         """Write all buffered episode metadata to parquet file."""
@@ -717,10 +725,18 @@ class LeRobotDataset(torch.utils.data.Dataset):
             if not self._check_cached_episodes_sufficient():
                 raise FileNotFoundError("Cached dataset doesn't contain all requested episodes")
         except (AssertionError, FileNotFoundError, NotADirectoryError):
-            if is_valid_version(self.revision):
+            # Skip network operations for local datasets
+            is_local = repo_id == "local" or repo_id.startswith("/")
+            
+            if is_valid_version(self.revision) and not is_local:
                 self.revision = get_safe_version(self.repo_id, self.revision)
-            self.download(download_videos)
-            self.hf_dataset = self.load_hf_dataset()
+            
+            if is_local:
+                # For local datasets, just load directly without downloading
+                self.hf_dataset = self.load_hf_dataset()
+            else:
+                self.download(download_videos)
+                self.hf_dataset = self.load_hf_dataset()
 
         # Create mapping from absolute indices to relative indices when only a subset of the episodes are loaded
         # Build a mapping: absolute_index -> relative_index_in_filtered_dataset

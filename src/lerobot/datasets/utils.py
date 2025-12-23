@@ -523,6 +523,13 @@ def get_safe_version(repo_id: str, version: str | packaging.version.Version) -> 
         BackwardCompatibilityError: If only older major versions are available.
         ForwardCompatibilityError: If only newer major versions are available.
     """
+    # Skip HuggingFace API calls for local datasets
+    if repo_id == "local" or repo_id.startswith("/"):
+        target_version = (
+            packaging.version.parse(version) if not isinstance(version, packaging.version.Version) else version
+        )
+        return f"v{target_version}"
+    
     target_version = (
         packaging.version.parse(version) if not isinstance(version, packaging.version.Version) else version
     )
